@@ -69,7 +69,8 @@ def print_status(agent: str) -> None:
     if agent in ("codex", "antigravity"):
         auth = get_auth_status(agent) if running else "N/A"
         if auth == "NOT AUTHENTICATED":
-            script = Path(__file__).resolve().with_name(f"auth_{agent}.py")
+            script_name = "agent_config.py" if agent == "codex" else "auth_antigravity.py"
+            script = Path(__file__).resolve().with_name(script_name)
             auth += f" (python3 {shlex.quote(str(script))})"
         print(f"- Auth: {auth}")
 

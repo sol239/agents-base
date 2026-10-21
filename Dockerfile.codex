@@ -5,13 +5,14 @@ RUN apt-get update && apt-get install -y \
     curl \
     ca-certificates \
     ripgrep \
+    socat \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g @openai/codex
 
 RUN useradd -m -s /bin/bash agent \
-    && mkdir -p /workspace \
-    && chown agent:agent /workspace
+    && mkdir -p /workspace /home/agent/.codex \
+    && chown agent:agent /workspace /home/agent/.codex
 
 USER agent
 WORKDIR /workspace

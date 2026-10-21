@@ -1,0 +1,42 @@
+services:
+  codex:
+    container_name: ${CODEX_CONTAINER_NAME:?Set CODEX_CONTAINER_NAME in .env}
+    build:
+      context: .
+      dockerfile: Dockerfile.codex
+    image: local/codex-cli
+    stdin_open: true
+    tty: true
+    working_dir: /workspace
+    command: ["sleep", "infinity"]
+    environment:
+      HOME: /home/agent
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - ./workspace:/workspace
+      - codex_home:/home/agent/.codex
+    init: true
+    restart: unless-stopped
+
+  antigravity:
+    container_name: ${ANTIGRAVITY_CONTAINER_NAME:?Set ANTIGRAVITY_CONTAINER_NAME in .env}
+    build:
+      context: .
+      dockerfile: Dockerfile.antigravity
+    image: local/antigravity-cli
+    stdin_open: true
+    tty: true
+    working_dir: /workspace
+    command: ["sleep", "infinity"]
+    environment:
+      HOME: /home/agent
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    volumes:
+      - ./workspace:/workspace
+      - antigravity_home:/home/agent
+    init: true
+    restart: unless-stopped
+
+volumes:
+  codex_home:
+  antigravity_home:

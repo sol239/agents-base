@@ -1,0 +1,28 @@
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    bash \
+    curl \
+    git \
+    ca-certificates \
+    ripgrep \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd -m -s /bin/bash agent \
+    && mkdir -p /workspace \
+    && chown agent:agent /workspace
+
+USER agent
+
+ENV HOME=/home/agent
+ENV PATH="/home/agent/.local/bin:${PATH}"
+
+RUN curl -fsSL \
+    https://antigravity.google/cli/install.sh \
+    -o /tmp/install-antigravity.sh \
+    && bash /tmp/install-antigravity.sh \
+    && rm /tmp/install-antigravity.sh
+
+WORKDIR /workspace
+
+CMD ["sleep", "infinity"]

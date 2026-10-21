@@ -1,0 +1,22 @@
+# Local secrets (keep the shared container-name .env tracked if it has no secrets)
+.env.local
+.env.*.local
+.env
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Local agent workspace data
+/workspace/*
+!/workspace/.gitkeep
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+workspace/

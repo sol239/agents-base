@@ -56,6 +56,8 @@ The examples assume the kernel starts in `notebooks/`. CLI sessions use `/worksp
 
 The pre-push hook runs all three checks. If formatting fails, it applies formatting and blocks the push. Review and commit the changes, then push again.
 
+GitHub Actions runs the same checks on pushes and pull requests, with a separate result for each check.
+
 To format manually:
 
 ```bash

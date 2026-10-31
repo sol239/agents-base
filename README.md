@@ -49,8 +49,13 @@ The examples assume the kernel starts in `notebooks/`. CLI sessions use `/worksp
 ## Checks
 
 ```bash
+# Ruff Linter
 ./scripts/check_lint.sh
+
+# Pyright
 ./scripts/check_types.sh
+
+# Ruff Formatter
 ./scripts/check_format.sh
 ```
 

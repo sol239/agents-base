@@ -7,7 +7,42 @@
 
 A shared Python interface for Codex CLI, Antigravity CLI, and local Ollama, with notebook examples.
 
-## Setup
+## Setup (using in other apps/repos)
+
+```bash
+# In the other repository run:
+
+# 1) add a git submodule (skip if already done)
+git submodule add \
+  https://github.com/sol239/agents-base.git \
+  agents-base
+
+# 2) update the submodule
+git submodule update --init --recursive
+```
+
+Create `agents-base/.env` with the host repository's absolute path:
+
+```dotenv
+CODEX_CONTAINER_NAME=base-codex-container
+ANTIGRAVITY_CONTAINER_NAME=base-antigravity-container
+AGENT_WORKSPACE=/absolute/path/to/your-project
+```
+
+Start the CLI containers from the submodule directory:
+
+```bash
+cd agents-base
+docker compose up -d --build codex antigravity
+```
+
+Both agents now see the entire host repository at `/workspace`. Create sessions with `workspace_id="/workspace"`. Follow the sign-in commands below if needed. No parent Compose file or microservice is required for this setup.
+
+Both CLI agents discover project skills in `your-project/.agents/skills/<skill-name>/SKILL.md`, available inside the containers at `/workspace/.agents/skills/<skill-name>/SKILL.md`. Place shared project skills there, rather than in the `agents-base` submodule's `.agents` directory.
+
+Changing `AGENT_WORKSPACE` requires running `docker compose up -d codex antigravity` again to recreate the containers with the new mount. The image does not need rebuilding. Without this variable, the mount defaults to `./workspace`.
+
+## Setup (using on its own)
 
 Requires Python 3.12+, Docker Compose, and Node.js for Pyright.
 
@@ -44,7 +79,7 @@ Open a notebook in VS Code, select the `.venv` Python kernel, and run cells in o
 - [Antigravity CLI](notebooks/antigravity_cli.ipynb)
 - [Ollama](notebooks/ollama.ipynb)
 
-The examples assume the kernel starts in `notebooks/`. CLI sessions use `/workspace`, mounted from the host's `./workspace` directory. Ollama currently supports chat without file-editing tools. Session state is stored in memory per provider instance.
+The examples assume the kernel starts in `notebooks/`. CLI sessions use `/workspace`, mounted from `AGENT_WORKSPACE` or the host's `./workspace` directory by default. Ollama currently supports chat without file-editing tools. Session state is stored in memory per provider instance.
 
 ## Checks
 

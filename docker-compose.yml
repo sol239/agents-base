@@ -26,7 +26,7 @@ services:
       HOME: /home/agent
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     volumes:
-      - ./workspace:/workspace
+      - ${AGENT_WORKSPACE:-./workspace}:/workspace
       - codex_home:/home/agent/.codex
     init: true
     restart: unless-stopped
@@ -45,7 +45,7 @@ services:
       HOME: /home/agent
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     volumes:
-      - ./workspace:/workspace
+      - ${AGENT_WORKSPACE:-./workspace}:/workspace
       - antigravity_home:/home/agent
     init: true
     restart: unless-stopped

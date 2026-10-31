@@ -23,9 +23,11 @@ git submodule update --init --recursive
 
 Create `agents-base/.env` with the host repository's absolute path:
 
+Choose your own container names; the names below are examples. Each name must be unique on your Docker host.
+
 ```dotenv
-CODEX_CONTAINER_NAME=base-codex-container
-ANTIGRAVITY_CONTAINER_NAME=base-antigravity-container
+CODEX_CONTAINER_NAME=your-project-codex
+ANTIGRAVITY_CONTAINER_NAME=your-project-antigravity
 AGENT_WORKSPACE=/absolute/path/to/your-project
 ```
 
@@ -56,8 +58,8 @@ git config --local core.hooksPath .githooks
 Create `.env` in the project root:
 
 ```dotenv
-CODEX_CONTAINER_NAME=base-codex-container
-ANTIGRAVITY_CONTAINER_NAME=base-antigravity-container
+CODEX_CONTAINER_NAME=your-project-codex
+ANTIGRAVITY_CONTAINER_NAME=your-project-antigravity
 ```
 
 Start the containers and sign in:

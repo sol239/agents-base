@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 
 from .generate_id import generate_id
@@ -27,13 +27,9 @@ class RunResult:
 @dataclass
 class Run:
     session_id: str
-    run_id: str = field(
-        default_factory=lambda: generate_id("run")
-    )
+    run_id: str = field(default_factory=lambda: generate_id("run"))
     status: RunStatus = RunStatus.QUEUED
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     started_at: datetime | None = None
     completed_at: datetime | None = None
     result: RunResult | None = None

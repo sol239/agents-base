@@ -3,13 +3,14 @@
 import asyncio
 import json
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from .local_provider import LocalProvider, container_name
-from core.models.model import Model
 from core.models.codex import CodexModel
+from core.models.model import Model
 from core.models.session import Session
 from core.models.usage import Usage
+
+from .local_provider import LocalProvider, container_name
 
 
 class CodexCLIProvider(LocalProvider):
@@ -28,24 +29,36 @@ class CodexCLIProvider(LocalProvider):
 
     async def authenticate(self) -> None:
         if not await self.is_authenticated():
-            await self._exec("codex", "login", "--device-auth", interactive=True, timeout=600)
+            await self._exec(
+                "codex", "login", "--device-auth", interactive=True, timeout=600
+            )
             if not await self.is_authenticated():
-                raise RuntimeError("Codex login completed without a saved authentication")
+                raise RuntimeError(
+                    "Codex login completed without a saved authentication"
+                )
 
     async def is_authenticated(self) -> bool:
         try:
             await self._exec("codex", "login", "status", timeout=15)
             return True
-        except (RuntimeError, ValueError, OSError, asyncio.TimeoutError):
+        except (TimeoutError, RuntimeError, ValueError, OSError):
             return False
 
     async def _run_session(self, session: Session, prompt: str) -> str:
         args = ["codex", "exec"]
         if session.provider_session_id:
             args.append("resume")
-        args.extend(["--skip-git-repo-check", "--json", "--model", session.model.model_id])
+        args.extend(
+            ["--skip-git-repo-check", "--json", "--model", session.model.model_id]
+        )
         if session.model.thinking_level is not None:
-            args.extend(["-c", "model_reasoning_effort=" + json.dumps(session.model.thinking_level)])
+            args.extend(
+                [
+                    "-c",
+                    "model_reasoning_effort="
+                    + json.dumps(session.model.thinking_level),
+                ]
+            )
         args.append("--")
         if session.provider_session_id:
             args.append(session.provider_session_id)
@@ -66,16 +79,23 @@ class CodexCLIProvider(LocalProvider):
             elif event.get("type") == "turn.completed":
                 completed = True
         if not completed or not session.provider_session_id:
-            raise RuntimeError("Codex did not return a completed turn and conversation ID")
+            raise RuntimeError(
+                "Codex did not return a completed turn and conversation ID"
+            )
         return "\n".join(messages)
 
     @asynccontextmanager
     async def _app_server(self):
         """Initialize a short-lived stdio RPC connection and clean it up."""
         process = await asyncio.create_subprocess_exec(
-            "docker", "exec", "-i", self.container or container_name(self.provider_id),
-            "codex", "app-server",
-            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+            "docker",
+            "exec",
+            "-i",
+            self.container or container_name(self.provider_id),
+            "codex",
+            "app-server",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         stdin, stdout, stderr = process.stdin, process.stdout, process.stderr
@@ -95,13 +115,19 @@ class CodexCLIProvider(LocalProvider):
                 if "error" in message:
                     raise RuntimeError(f"Codex {method} failed: {message['error']}")
                 return message["result"]
-            raise RuntimeError("Codex app-server closed before returning an RPC response")
+            raise RuntimeError(
+                "Codex app-server closed before returning an RPC response"
+            )
 
         try:
             async with asyncio.timeout(self.timeout):
-                await request(1, "initialize", {
-                    "clientInfo": {"name": "agents-base", "version": "1.0.0"},
-                })
+                await request(
+                    1,
+                    "initialize",
+                    {
+                        "clientInfo": {"name": "agents-base", "version": "1.0.0"},
+                    },
+                )
                 await send({"method": "initialized"})
                 yield request
         finally:
@@ -124,17 +150,25 @@ class CodexCLIProvider(LocalProvider):
                 while True:
                     result = await request(request_id, "model/list", {"cursor": cursor})
                     for row in result["data"]:
-                        models.append(CodexModel(
-                            model_id=row["model"], name=row["displayName"],
-                            supported_thinking_levels=tuple(
-                                option["reasoningEffort"] for option in row.get("supportedReasoningEfforts", [])
-                            ),
-                        ))
+                        models.append(
+                            CodexModel(
+                                model_id=row["model"],
+                                name=row["displayName"],
+                                supported_thinking_levels=tuple(
+                                    option["reasoningEffort"]
+                                    for option in row.get(
+                                        "supportedReasoningEfforts", []
+                                    )
+                                ),
+                            )
+                        )
                     cursor = result.get("nextCursor")
                     if not cursor:
                         return models
                     if cursor in seen_cursors:
-                        raise RuntimeError("Codex returned a repeated model-list cursor")
+                        raise RuntimeError(
+                            "Codex returned a repeated model-list cursor"
+                        )
                     seen_cursors.add(cursor)
                     request_id += 1
         except (KeyError, TypeError, ValueError) as error:
@@ -157,7 +191,9 @@ class CodexCLIProvider(LocalProvider):
         usages = []
         try:
             for bucket_id, snapshot in buckets.items():
-                label = snapshot.get("limitName") or snapshot.get("limitId") or bucket_id
+                label = (
+                    snapshot.get("limitName") or snapshot.get("limitId") or bucket_id
+                )
                 for key in ("primary", "secondary"):
                     window = snapshot.get(key)
                     if window is None:
@@ -166,11 +202,24 @@ class CodexCLIProvider(LocalProvider):
                     if reset is None:
                         raise ValueError("Quota reset time is missing")
                     minutes = window.get("windowDurationMins")
-                    name = f"{label} / {minutes} minutes" if minutes else f"{label} / {key}"
-                    usages.append(Usage(
-                        name=name, value=float(window["usedPercent"]) / 100,
-                        resets_at=datetime.fromtimestamp(reset, tz=timezone.utc),
-                    ))
-        except (KeyError, TypeError, ValueError, AttributeError, OverflowError) as error:
+                    name = (
+                        f"{label} / {minutes} minutes"
+                        if minutes
+                        else f"{label} / {key}"
+                    )
+                    usages.append(
+                        Usage(
+                            name=name,
+                            value=float(window["usedPercent"]) / 100,
+                            resets_at=datetime.fromtimestamp(reset, tz=UTC),
+                        )
+                    )
+        except (
+            KeyError,
+            TypeError,
+            ValueError,
+            AttributeError,
+            OverflowError,
+        ) as error:
             raise RuntimeError("Codex returned invalid quota data") from error
         return usages

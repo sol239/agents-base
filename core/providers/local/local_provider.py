@@ -1,17 +1,21 @@
 """Base class for providers backed by local Docker Compose services."""
 
 import asyncio
+import logging
 import os
 import shlex
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
-from ..provider import Provider
-from core.models.session import Session
 from core.models.model import Model
 from core.models.run import Run, RunRequest, RunResult, RunStatus
+from core.models.session import Session
 from core.models.usage import Usage
+
+from ..provider import Provider
+
+logger = logging.getLogger(__name__)
 
 
 def container_name(agent: str) -> str:
@@ -33,8 +37,13 @@ def container_name(agent: str) -> str:
 class LocalProvider(Provider):
     """Share asynchronous container lifecycle operations across local providers."""
 
-    def __init__(self, *, container: str | None = None, model: Model | None = None,
-                 timeout: float = 300) -> None:
+    def __init__(
+        self,
+        *,
+        container: str | None = None,
+        model: Model | None = None,
+        timeout: float = 300,
+    ) -> None:
         self.container = container
         self.model = model
         self.timeout = timeout
@@ -59,8 +68,12 @@ class LocalProvider(Provider):
         if model.thinking_level is not None:
             levels = await model.get_thinking_levels()
             if model.thinking_level not in levels:
-                raise ValueError(f"Unsupported thinking level {model.thinking_level!r}; choose from {levels}")
-        session = Session(provider_id=self.provider_id, model=model, workspace_id=workspace_id)
+                raise ValueError(
+                    f"Unsupported thinking level {model.thinking_level!r}; choose from {levels}"
+                )
+        session = Session(
+            provider_id=self.provider_id, model=model, workspace_id=workspace_id
+        )
         self._sessions[session.session_id] = session
         self._session_locks[session.session_id] = asyncio.Lock()
         self._history[session.session_id] = []
@@ -74,8 +87,13 @@ class LocalProvider(Provider):
             raise KeyError(f"Unknown or closed session: {session_id}") from None
 
     def _validate_session(self, session: Session) -> None:
-        if session.provider_id != self.provider_id or self._sessions.get(session.session_id) is not session:
-            raise ValueError("Session does not belong to this provider instance or is closed")
+        if (
+            session.provider_id != self.provider_id
+            or self._sessions.get(session.session_id) is not session
+        ):
+            raise ValueError(
+                "Session does not belong to this provider instance or is closed"
+            )
 
     async def close_session(self, session: Session) -> None:
         """Release application session state after any current run finishes."""
@@ -91,14 +109,19 @@ class LocalProvider(Provider):
         self._validate_prompt(request.prompt)
         async with self._session_locks[session.session_id]:
             self._validate_session(session)
-            run = Run(session_id=session.session_id, status=RunStatus.RUNNING,
-                      started_at=datetime.now(timezone.utc))
+            run = Run(
+                session_id=session.session_id,
+                status=RunStatus.RUNNING,
+                started_at=datetime.now(UTC),
+            )
             try:
                 output = await self._run_session(session, request.prompt)
-                self._history[session.session_id].extend([
-                    {"role": "user", "content": request.prompt},
-                    {"role": "assistant", "content": output},
-                ])
+                self._history[session.session_id].extend(
+                    [
+                        {"role": "user", "content": request.prompt},
+                        {"role": "assistant", "content": output},
+                    ]
+                )
                 run.result = RunResult(output=output)
                 run.status = RunStatus.COMPLETED
             except asyncio.CancelledError:
@@ -106,10 +129,11 @@ class LocalProvider(Provider):
                 run.result = RunResult(error="Run cancelled")
                 raise
             except Exception as error:
+                logger.exception("Run failed for provider %s", self.provider_id)
                 run.status = RunStatus.FAILED
                 run.result = RunResult(error=str(error))
             finally:
-                run.completed_at = datetime.now(timezone.utc)
+                run.completed_at = datetime.now(UTC)
             return run
 
     async def _run_session(self, session: Session, prompt: str) -> str:
@@ -118,11 +142,18 @@ class LocalProvider(Provider):
     @staticmethod
     def _workspace(session: Session) -> str:
         if not session.workspace_id.startswith("/"):
-            raise ValueError("workspace_id must be an absolute container path for CLI providers")
+            raise ValueError(
+                "workspace_id must be an absolute container path for CLI providers"
+            )
         return session.workspace_id
 
-    async def _exec(self, *args: str, interactive: bool = False,
-                    timeout: float | None = None, workdir: str | None = None) -> str:
+    async def _exec(
+        self,
+        *args: str,
+        interactive: bool = False,
+        timeout: float | None = None,
+        workdir: str | None = None,
+    ) -> str:
         command = ["docker", "exec"]
         if workdir is not None:
             command.extend(["--workdir", workdir])
@@ -138,8 +169,9 @@ class LocalProvider(Provider):
         if not isinstance(prompt, str) or not prompt.strip():
             raise ValueError("prompt must be a non-empty string")
 
-    async def _docker(self, *command: str, interactive: bool = False,
-                      timeout: float | None = None) -> str:
+    async def _docker(
+        self, *command: str, interactive: bool = False, timeout: float | None = None
+    ) -> str:
         try:
             process = await asyncio.create_subprocess_exec(
                 *command,
@@ -151,9 +183,10 @@ class LocalProvider(Provider):
             raise RuntimeError(f"Cannot launch {self.name}: {error}") from error
         try:
             stdout, stderr = await asyncio.wait_for(
-                process.communicate(), timeout=self.timeout if timeout is None else timeout,
+                process.communicate(),
+                timeout=self.timeout if timeout is None else timeout,
             )
-        except (asyncio.TimeoutError, asyncio.CancelledError):
+        except (TimeoutError, asyncio.CancelledError):
             if process.returncode is None:
                 try:
                     process.kill()
@@ -163,16 +196,28 @@ class LocalProvider(Provider):
             raise
         if process.returncode:
             detail = (stderr or stdout or b"").decode(errors="replace").strip()
-            raise RuntimeError(f"{self.name} exited with code {process.returncode}: {detail}")
+            raise RuntimeError(
+                f"{self.name} exited with code {process.returncode}: {detail}"
+            )
         return (stdout or b"").decode(errors="replace").strip()
 
     async def _compose(self, *args: str) -> str:
         project_dir = Path(__file__).resolve().parents[3]
-        command = ["docker", "compose", "--project-directory", str(project_dir),
-                   "-f", str(project_dir / "docker-compose.yml")]
+        command = [
+            "docker",
+            "compose",
+            "--project-directory",
+            str(project_dir),
+            "-f",
+            str(project_dir / "docker-compose.yml"),
+        ]
         if self.container:
             # Override the container name without modifying the process environment.
-            command = ["env", f"{self.provider_id.upper()}_CONTAINER_NAME={self.container}", *command]
+            command = [
+                "env",
+                f"{self.provider_id.upper()}_CONTAINER_NAME={self.container}",
+                *command,
+            ]
         return await self._docker(*command, *args, self.provider_id)
 
     async def start_container(self) -> None:

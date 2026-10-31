@@ -5,7 +5,9 @@ from .model import Model
 
 @dataclass
 class AntigravityModel(Model):
-    thinking_variants: dict[str, str] = field(default_factory=dict, repr=False, compare=False)
+    thinking_variants: dict[str, str] = field(
+        default_factory=dict, repr=False, compare=False
+    )
 
     async def get_thinking_levels(self) -> list[str]:
         """Return levels backed by model variants in the available catalog."""
@@ -18,4 +20,6 @@ class AntigravityModel(Model):
         try:
             return self.thinking_variants[self.thinking_level]
         except KeyError:
-            raise ValueError(f"Unsupported thinking level: {self.thinking_level}") from None
+            raise ValueError(
+                f"Unsupported thinking level: {self.thinking_level}"
+            ) from None

@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+project_root=$(git rev-parse --show-toplevel)
+cd "$project_root"
+
+echo "Checking Ruff formatting, Ruff linting, and Pyright before push..."
+status=0
+scripts/check_lint.sh || status=1
+scripts/check_types.sh || status=1
+if ! scripts/check_format.sh; then
+    status=1
+    if .venv/bin/ruff format .; then
+        echo "Formatting fixed. Review and commit the formatting changes, then push again." >&2
+    else
+        echo "Formatting could not be fixed automatically. Fix the errors, commit your changes, then push again." >&2
+    fi
+fi
+exit "$status"

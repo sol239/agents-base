@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 
 from core.models.model import Model
-from core.models.session import Session
 from core.models.run import Run, RunRequest
+from core.models.session import Session
 from core.models.usage import Usage
 
 

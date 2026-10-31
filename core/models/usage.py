@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 @dataclass(frozen=True)
@@ -15,4 +15,4 @@ class Usage:
             raise ValueError("Usage value must be between 0 and 1")
         if self.resets_at.utcoffset() is None:
             raise ValueError("Usage resets_at must be timezone-aware")
-        object.__setattr__(self, "resets_at", self.resets_at.astimezone(timezone.utc))
+        object.__setattr__(self, "resets_at", self.resets_at.astimezone(UTC))

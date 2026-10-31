@@ -1,5 +1,5 @@
-from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 
 from .generate_id import generate_id
 

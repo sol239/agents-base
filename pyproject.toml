@@ -1,0 +1,11 @@
+[tool.ruff]
+target-version = "py312"
+extend-exclude = ["workspace"]
+
+[tool.pyright]
+include = ["core", "app"]
+exclude = [".venv", "workspace"]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+venvPath = "."
+venv = ".venv"

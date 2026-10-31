@@ -28,6 +28,11 @@ class Provider(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def refresh_usages(self) -> list[Usage]:
+        """Fetch quota usage and update the usages snapshot."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def authenticate(self) -> None:
         """Authenticate with the provider."""
         raise NotImplementedError

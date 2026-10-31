@@ -1,4 +1,13 @@
 services:
+  ollama:
+    container_name: ${OLLAMA_CONTAINER_NAME:-base-ollama-container}
+    image: ollama/ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
   codex:
     container_name: ${CODEX_CONTAINER_NAME:?Set CODEX_CONTAINER_NAME in .env}
     build:
@@ -42,5 +51,6 @@ services:
     restart: unless-stopped
 
 volumes:
+  ollama_data:
   codex_home:
   antigravity_home:

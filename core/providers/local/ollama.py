@@ -19,6 +19,9 @@ class OllamaProvider(LocalProvider):
         """Local Ollama does not expose account quota usage."""
         return []
 
+    async def refresh_usages(self) -> list[Usage]:
+        return []
+
     def __init__(self, model: Model | None = None, *, base_url: str | None = None,
                  timeout: float = 300, container: str | None = None) -> None:
         env_model = os.environ.get("OLLAMA_MODEL")
@@ -70,7 +73,7 @@ class OllamaProvider(LocalProvider):
             rows = result["models"]
             if not isinstance(rows, list):
                 raise ValueError("models must be a list")
-            models = [OllamaModel(model_id=row["model"], name=row["name"],
+            models: list[Model] = [OllamaModel(model_id=row["model"], name=row["name"],
                                   request=lambda *args, **kwargs: self._request(*args, **kwargs)) for row in rows]
             if any(not isinstance(m.model_id, str) or not isinstance(m.name, str) for m in models):
                 raise ValueError("invalid model fields")

@@ -3,6 +3,7 @@
 import asyncio
 import json
 import sys
+from datetime import datetime
 
 from .local_provider import LocalProvider
 from core.models.model import Model
@@ -16,6 +17,30 @@ class AntigravityCLIProvider(LocalProvider):
     def usages(self) -> list[Usage]:
         """Return the latest stored quota snapshots without performing I/O."""
         return list(self._usages)
+
+    async def refresh_usages(self) -> list[Usage]:
+        """Run the local /usage command; this does not submit a model prompt."""
+        output = await self._exec("agy", "--output-format", "json", "--print", "/usage", timeout=30)
+        usages = self._parse_usages(json.loads(output))
+        self._usages = usages
+        return self.usages
+
+    @staticmethod
+    def _parse_usages(result: dict) -> list[Usage]:
+        if result.get("status") != "SUCCESS" or result.get("command", {}).get("name") not in ("usage", "quota"):
+            raise RuntimeError("Antigravity did not return a successful usage command result")
+        usages = []
+        try:
+            for group in result["command"]["data"]["groups"]:
+                for bucket in group["buckets"]:
+                    usages.append(Usage(
+                        name=f"{group['name']} / {bucket['name']}",
+                        value=1 - float(bucket["remaining_fraction"]),
+                        resets_at=datetime.fromisoformat(bucket["reset_time"].replace("Z", "+00:00")),
+                    ))
+        except (KeyError, TypeError, ValueError, AttributeError) as error:
+            raise RuntimeError("Antigravity returned invalid quota data") from error
+        return usages
 
     @property
     def provider_id(self) -> str:

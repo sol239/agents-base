@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from .local_provider import LocalProvider, container_name
 from core.models.model import Model
@@ -67,30 +69,33 @@ class CodexCLIProvider(LocalProvider):
             raise RuntimeError("Codex did not return a completed turn and conversation ID")
         return "\n".join(messages)
 
-    async def get_models(self) -> list[Model]:
-        """Read the paginated catalog through Codex's stdio app-server API."""
+    @asynccontextmanager
+    async def _app_server(self):
+        """Initialize a short-lived stdio RPC connection and clean it up."""
         process = await asyncio.create_subprocess_exec(
             "docker", "exec", "-i", self.container or container_name(self.provider_id),
             "codex", "app-server",
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stderr_task = asyncio.create_task(process.stderr.read())
+        stdin, stdout, stderr = process.stdin, process.stdout, process.stderr
+        assert stdin is not None and stdout is not None and stderr is not None
+        stderr_task = asyncio.create_task(stderr.read())
 
         async def send(message: dict) -> None:
-            process.stdin.write((json.dumps(message) + "\n").encode())
-            await process.stdin.drain()
+            stdin.write((json.dumps(message) + "\n").encode())
+            await stdin.drain()
 
         async def request(request_id: int, method: str, params: dict) -> dict:
             await send({"id": request_id, "method": method, "params": params})
-            while line := await process.stdout.readline():
+            while line := await stdout.readline():
                 message = json.loads(line)
                 if message.get("id") != request_id:
                     continue
                 if "error" in message:
                     raise RuntimeError(f"Codex {method} failed: {message['error']}")
                 return message["result"]
-            raise RuntimeError("Codex app-server closed before returning its model list")
+            raise RuntimeError("Codex app-server closed before returning an RPC response")
 
         try:
             async with asyncio.timeout(self.timeout):
@@ -98,6 +103,20 @@ class CodexCLIProvider(LocalProvider):
                     "clientInfo": {"name": "agents-base", "version": "1.0.0"},
                 })
                 await send({"method": "initialized"})
+                yield request
+        finally:
+            if process.returncode is None:
+                try:
+                    process.kill()
+                except ProcessLookupError:
+                    pass
+            await process.wait()
+            await stderr_task
+
+    async def get_models(self) -> list[Model]:
+        """Read the paginated catalog through Codex's stdio app-server API."""
+        try:
+            async with self._app_server() as request:
                 models = []
                 cursor = None
                 request_id = 2
@@ -120,11 +139,38 @@ class CodexCLIProvider(LocalProvider):
                     request_id += 1
         except (KeyError, TypeError, ValueError) as error:
             raise RuntimeError("Codex returned an invalid model list") from error
-        finally:
-            if process.returncode is None:
-                try:
-                    process.kill()
-                except ProcessLookupError:
-                    pass
-            await process.wait()
-            await stderr_task
+
+    async def refresh_usages(self) -> list[Usage]:
+        """Fetch account quota windows, then replace the stored snapshot."""
+        async with self._app_server() as request:
+            result = await request(2, "account/rateLimits/read", {})
+        usages = self._parse_usages(result)
+        self._usages = usages
+        return self.usages
+
+    @staticmethod
+    def _parse_usages(result: dict) -> list[Usage]:
+        buckets = result.get("rateLimitsByLimitId")
+        if buckets is None:
+            snapshot = result.get("rateLimits")
+            buckets = {"codex": snapshot} if snapshot else {}
+        usages = []
+        try:
+            for bucket_id, snapshot in buckets.items():
+                label = snapshot.get("limitName") or snapshot.get("limitId") or bucket_id
+                for key in ("primary", "secondary"):
+                    window = snapshot.get(key)
+                    if window is None:
+                        continue
+                    reset = window.get("resetsAt")
+                    if reset is None:
+                        raise ValueError("Quota reset time is missing")
+                    minutes = window.get("windowDurationMins")
+                    name = f"{label} / {minutes} minutes" if minutes else f"{label} / {key}"
+                    usages.append(Usage(
+                        name=name, value=float(window["usedPercent"]) / 100,
+                        resets_at=datetime.fromtimestamp(reset, tz=timezone.utc),
+                    ))
+        except (KeyError, TypeError, ValueError, AttributeError, OverflowError) as error:
+            raise RuntimeError("Codex returned invalid quota data") from error
+        return usages
